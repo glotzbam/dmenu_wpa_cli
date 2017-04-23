@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+
+from subprocess import getoutput
+from pprint import pprint
+from sys import exit
+from time import sleep
+
+# global vars {{{
+commands = { 
+    'list_known_networks': "wpa_cli list_networks",
+    'switch_to_network': "wpa_cli select_network %i",
+    'dmenu_invocation': 'echo "%s" | dmenu -l %i -p "Available Networks" -i',
+    'find_wpa_gui': 'which wpa_gui',
+    'open_gui': 'wpa_gui'
+}
+
+wpa_scan_timeout_s = 2
+show_flags = True
+# }}}
+
+def scan_networks():
+    getoutput("wpa_cli scan")
+    sleep(wpa_scan_timeout_s)
+    getoutput("wpa_cli abort_scan")
+    result = getoutput("wpa_cli scan_results").splitlines()[2:]
+
+    basic = {}
+
+    # with open('wpa_cli.results', 'r') as f:
+    #     result = f.read().splitlines()[2:]
+
+    for line in result:
+        nw = line.split('\t')
+
+        bssid = nw[0]
+        frequency = nw[1]
+        signal_level = int(nw[2])
+        flags = nw[3]
+        name = nw[4]
+
+        if (name in basic.keys() and signal_level > basic[name]['signal_level']) or name not in basic.keys():
+            basic[name] = {
+                'bssid': bssid,
+                'frequency': frequency,
+                'signal_level': signal_level,
+                'flags': flags
+            }
+
+    networks = []
+
+    for key in basic.keys():
+        item = basic[key]
+        networks.append({
+            'name': key, 
+            'bssid': item['bssid'],
+            'frequency': item['frequency'],
+            'signal_level': item['signal_level'],
+            'flags': item['flags'],
+            'secure': u'' if item['flags'].find('WPA') > -1 or item['flags'].find('WEP') > -1 else u''
+        })
+
+    networks.sort(key=lambda nw: nw['signal_level'], reverse=True)
+    return networks
+
+
+def gui_available():
+    if getoutput(commands['find_gui']) == None:
+        return False
+    
+    return True
+
+
+def get_known_networks():
+    result = getoutput(commands['list_known_networks'])
+
+    networks = {}
+
+    for line in result.splitlines()[2:]:
+        lsp = line.split("\t")
+        networks[lsp[1]] = {
+            "id": int(lsp[0]),
+            "active": True if lsp[3] == "[CURRENT]" else False
+        }
+
+    return networks
+
+
+def merge_lists(available, known):
+    known_list = known.keys()
+
+    networks = []
+    widest_name = 0
+    widest_flags = 0
+    
+    for item in available:
+        n_item = item
+
+        if item['name'] in known_list:
+            k_item = known[item['name']]
+            n_item['id'] = k_item['id']
+            n_item['active'] = "*" if k_item['active'] else " "
+        else:
+            n_item['id'] = -2
+            n_item['active'] = " "
+
+        networks.append(n_item)
+
+        if len(item['name']) > widest_name:
+            widest_name = len(item['name'])
+
+        if len(item['flags']) > widest_flags:
+            widest_flags = len(item['flags'])
+
+    return networks, widest_name, widest_flags
+
+
+def generate_menu(networks, name_width, flags_width):
+    global show_flags
+
+    total_width = 0
+    template = ""
+
+    if show_flags:
+        total_width = 14 + name_width + flags_width
+        template = u"{active} {secure} {name:<%d} [{signal_level:+03d} dBm] {flags:>%d}\n" % (name_width, flags_width)
+    else:
+        total_width = 14 + name_width
+        template = u"{active} {secure} {name:<%d} [{signal_level:+03d} dBm]\n" % (name_width)
+
+    top = ""
+    bottom = ""
+    divider_tpl = " {:━^%d}\n" % (total_width)
+    
+    for nw in networks:
+        if nw['id'] >= 0:
+            top += template.format(**nw)
+        else:
+            bottom += template.format(**nw)
+    
+    netlist = top + divider_tpl.format(" Unconfigured networks ") + bottom
+
+    return netlist[:-1]
+
+def get_dmenu_choice(netlist):
+    return getoutput(commands['dmenu_invocation'] % (netlist, len(netlist)))[4:].split('[')[0].strip()
+
+
+def find_net_id(networks, name):
+    if name == 'Open GUI':
+        return -2
+
+    for network in networks:
+        if name == network['name']:
+            return network['id']
+
+    return -1
+
+
+def connect_network(net_id):
+    if net_id == -2 and gui_available():
+        getoutput(commands['open_gui'])
+        exit(0)
+
+    if net_id >= 0:
+        getoutput(commands['switch_to_network'])
+        exit(0)
+
+    exit(1)
+
+
+def main():
+    # if wpa_scan_timeout_s == 0:
+    available_networks = scan_networks()
+
+    known_networks = get_known_networks()
+    networks, name_width, flags_width = merge_lists(available_networks, known_networks)
+    # pprint(networks)
+    menu = generate_menu(networks, name_width, flags_width)
+    choice = get_dmenu_choice(menu)
+    net_id = find_net_id(networks, choice)
+
+    
+
+
+if __name__ == '__main__':
+    main()
