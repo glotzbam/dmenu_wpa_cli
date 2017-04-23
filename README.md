@@ -65,5 +65,5 @@ everything should work just fine.
 
 ## TODO
 
---* command line arguments to configure output and scan timeout
---* menu item to rescan available networks
+- [ ] command line arguments to configure output and scan timeout
+- [ ] menu item to rescan available networks
