@@ -39,15 +39,15 @@ work, wpa_cli must have write access to
 the socket used by wpa_supplicant.
 
 To make this work, make sure you enable
-__wpa_supplicant@.service__ instead of 
-__wpa_supplicant.service__ for your adapter.
-So if its udev name is wlan0 for instance,
-you use
+`wpa_supplicant@.service` instead of 
+`wpa_supplicant.service` for your adapter.
+So if its udev name is `wlan0` for instance,
+you'd use
 
 `systemctl enable wpa_supplicant@wlan0.service`
 
-Aditionally your wpa_supplicant config file
-should be named 
+Aditionally the path to your wpa_supplicant 
+config file should be 
 
 `/etc/wpa_supplicant/wpa_supplicant-wlan0.config`
 
@@ -60,10 +60,24 @@ something in the way of
 
 `ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=wifi`
 
-If your user is member of the wifi group,
+If your user is member of the `wifi` group,
 everything should work just fine.
+
+Furthermore you should have FontAwesome installed
+in your system for various icons used in the menu.
+Otherwise you'll have to replace the symbols in
+the script by hand, I'm afraid. At least at the
+moment. Maybe I'll add a command line switch
+to disable them.
 
 ## TODO
 
-- [ ] command line arguments to configure output and scan timeout
+- [ ] pass (debug) messages to wpa_supplicant's log
 - [ ] menu item to rescan available networks
+- [ ] command line arguments switches to configure:
+	- [ ] output (menu wise)
+	- [ ] scan timeout
+	- [ ] message log
+	- [ ] FontAwesome symbols
+- [ ] script for notification daemon
+- [ ] waiting 'til network scan is finished
